@@ -1,7 +1,7 @@
 version: '3.9'
 
 services:
-  # ── PostgreSQL Database ──────────────────────────
+  # ── PostgreSQL ───────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: krishimitra_postgres
@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis Cache ──────────────────────────────────
+  # ── Redis ────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: krishimitra_redis
@@ -36,19 +36,70 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis GUI (free, local only) ─────────────────
-  redis_commander:
-    image: rediscommander/redis-commander:latest
-    container_name: krishimitra_redis_ui
+  # ── NestJS API ───────────────────────────────────
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: krishimitra_api
     restart: unless-stopped
-    environment:
-      REDIS_HOSTS: local:redis:6379
     ports:
-      - '8081:8081'
+      - '3001:3001'
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://krishimitra:krishimitra_dev_password@postgres:5432/krishimitra_db
+      REDIS_URL: redis://redis:6379
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
 
-  # ── pgAdmin (free database GUI) ──────────────────
+  # ── Next.js Web ──────────────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: krishimitra_web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_AI_URL: http://localhost:8000
+    depends_on:
+      - api
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+
+  # ── FastAPI AI ───────────────────────────────────
+  ai:
+    build:
+      context: ./apps/ai
+      dockerfile: Dockerfile
+    container_name: krishimitra_ai
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    environment:
+      DATABASE_URL: postgresql://krishimitra:krishimitra_dev_password@postgres:5432/krishimitra_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/ai:/app
+
+  # ── pgAdmin ──────────────────────────────────────
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: krishimitra_pgadmin
@@ -60,6 +111,18 @@ services:
       - '5050:80'
     depends_on:
       - postgres
+
+  # ── Redis Commander ──────────────────────────────
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: krishimitra_redis_ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - '8081:8081'
+    depends_on:
+      - redis
 
 volumes:
   postgres_data:
