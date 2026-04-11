@@ -1,0 +1,66 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL Database ──────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: krishimitra_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: krishimitra
+      POSTGRES_PASSWORD: krishimitra_dev_password
+      POSTGRES_DB: krishimitra_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U krishimitra']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis Cache ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: krishimitra_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis GUI (free, local only) ─────────────────
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: krishimitra_redis_ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - '8081:8081'
+    depends_on:
+      - redis
+
+  # ── pgAdmin (free database GUI) ──────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: krishimitra_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@krishimitra.dev
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  redis_data:
