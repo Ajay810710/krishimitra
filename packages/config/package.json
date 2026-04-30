@@ -5,7 +5,8 @@
   "exports": {
     "./typescript-base": "./typescript-base.json",
     "./typescript-next": "./typescript-next.json",
-    "./typescript-nestjs": "./typescript-nestjs.json"
+    "./typescript-nestjs": "./typescript-nestjs.json",
+    "./typescript-nest": "./typescript-nestjs.json"
   },
   "scripts": {
     "build": "echo 'config package — nothing to build'",
