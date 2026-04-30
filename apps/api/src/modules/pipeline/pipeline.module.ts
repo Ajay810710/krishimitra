@@ -6,6 +6,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { PrismaService } from '../database/prisma.service.js';
 import { PipelineScheduler } from './pipeline.scheduler.js';
 import { IngestPricesProcessor } from './processors/ingest-prices.processor.js';
 import { PRICE_INGEST_QUEUE } from './pipeline.constants.js';
@@ -28,6 +29,6 @@ export { PRICE_INGEST_QUEUE };
     }),
     BullModule.registerQueue({ name: PRICE_INGEST_QUEUE }),
   ],
-  providers: [PipelineScheduler, IngestPricesProcessor],
+  providers: [PrismaService, PipelineScheduler, IngestPricesProcessor],
 })
 export class PipelineModule {}

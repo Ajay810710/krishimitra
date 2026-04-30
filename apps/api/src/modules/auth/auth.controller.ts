@@ -1,17 +1,20 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { IsString, Matches, Length } from 'class-validator';
 import { AuthService } from './auth.service.js';
 
 class RequestOtpDto {
+  @IsString()
+  @Matches(/^[6-9]\d{9}$/, { message: 'Enter a valid 10-digit Indian mobile number' })
   phone!: string;
 }
 
 class VerifyOtpDto {
-  phone!: string;
-  code!: string;
+  @IsString() phone!: string;
+  @IsString() @Length(6, 6) code!: string;
 }
 
 class RefreshDto {
-  refreshToken!: string;
+  @IsString() refreshToken!: string;
 }
 
 @Controller('auth')
