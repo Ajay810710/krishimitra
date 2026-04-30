@@ -1,16 +1,13 @@
-/**
- * OTP verification page — farmer enters the 6-digit code received via SMS.
- */
-
 'use client';
 
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth.store';
 
-export default function VerifyPage() {
+function VerifyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone') ?? '';
@@ -24,17 +21,11 @@ export default function VerifyPage() {
   const { setAuth } = useAuthStore();
 
   const handleInput = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) {
-      return;
-    }
+    if (!/^\d*$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value.slice(-1);
     setOtp(newOtp);
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
     if (newOtp.every((d) => d !== '') && newOtp.length === 6) {
       void handleVerify(newOtp.join(''));
     }
@@ -49,7 +40,6 @@ export default function VerifyPage() {
   const handleVerify = async (code: string) => {
     setIsLoading(true);
     setError(null);
-
     try {
       const response = await apiClient.post<{
         data: {
@@ -63,8 +53,7 @@ export default function VerifyPage() {
       setAuth({ accessToken, refreshToken, farmer });
       router.push('/');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Invalid OTP. Please try again.';
+      const message = err instanceof Error ? err.message : 'Invalid OTP. Please try again.';
       setError(message);
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
@@ -100,7 +89,6 @@ export default function VerifyPage() {
       </div>
 
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
-        {/* OTP Input Grid */}
         <div className="mb-6 flex justify-center gap-3">
           {otp.map((digit, index) => (
             <input
@@ -118,9 +106,7 @@ export default function VerifyPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
         )}
 
         <button
@@ -142,5 +128,17 @@ export default function VerifyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-krishna-600 border-t-transparent" />
+      </div>
+    }>
+      <VerifyForm />
+    </Suspense>
   );
 }
