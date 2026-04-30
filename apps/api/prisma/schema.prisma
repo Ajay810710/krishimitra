@@ -1,0 +1,251 @@
+// KrishiMitra — Prisma Schema
+// Generated from service code and seed data
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum PreferredLanguage {
+  HINDI
+  KANNADA
+  TELUGU
+  TAMIL
+  ENGLISH
+}
+
+enum CropCategory {
+  VEGETABLE
+  GRAIN
+  FRUIT
+  SPICE
+  PULSE
+  OILSEED
+}
+
+enum PredictionStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DemandTrend {
+  HIGH
+  MODERATE
+  LOW
+  DECLINING
+}
+
+enum WeatherRisk {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum Recommendation {
+  PLANT
+  WAIT
+  CONSIDER_ALTERNATIVES
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
+
+model Farmer {
+  id                String            @id @default(uuid())
+  phone             String            @unique
+  name              String
+  isVerified        Boolean           @default(false)
+  isActive          Boolean           @default(true)
+  preferredLanguage PreferredLanguage @default(HINDI)
+
+  // Location
+  village   String?
+  district  String?
+  state     String?
+  pincode   String?
+
+  // Preferred mandi
+  mandiId String?
+  mandi   Mandi?  @relation(fields: [mandiId], references: [id])
+
+  // Relations
+  otps          Otp[]
+  refreshTokens RefreshToken[]
+  predictions   Prediction[]
+  landParcels   LandParcel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("farmers")
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  farmerId  String
+  farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  phone     String
+  code      String
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("otps")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  farmerId  String
+  farmer    Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model LandParcel {
+  id         String  @id @default(uuid())
+  farmerId   String
+  farmer     Farmer  @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  name       String
+  sizeAcres  Float
+  village    String?
+  district   String?
+  state      String?
+  soilType   String?
+
+  predictions Prediction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("land_parcels")
+}
+
+model Crop {
+  id                   String       @id @default(uuid())
+  name                 String       @unique
+  nameHindi            String?
+  nameKannada          String?
+  nameTelugu           String?
+  nameTamil            String?
+  category             CropCategory
+  typicalDaysToHarvest Int?
+  isActive             Boolean      @default(true)
+
+  predictions  Prediction[]
+  mandiPrices  MandiPrice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("crops")
+}
+
+model Mandi {
+  id        String  @id @default(uuid())
+  name      String
+  district  String
+  state     String
+  pincode   String?
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean @default(true)
+
+  farmers     Farmer[]
+  predictions Prediction[]
+  mandiPrices MandiPrice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, district])
+  @@map("mandis")
+}
+
+model MandiPrice {
+  id          String   @id @default(uuid())
+  mandiId     String
+  mandi       Mandi    @relation(fields: [mandiId], references: [id])
+  cropId      String
+  crop        Crop     @relation(fields: [cropId], references: [id])
+  priceDate   DateTime @db.Date
+  variety     String   @default("")
+  grade       String   @default("")
+
+  minPrice    Float
+  maxPrice    Float
+  modalPrice  Float
+  minPriceKg  Float
+  maxPriceKg  Float
+  modalPriceKg Float
+
+  source    String  @default("AGMARKNET")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mandiId, cropId, priceDate, variety, grade], name: "mandiId_cropId_priceDate_variety_grade")
+  @@map("mandi_prices")
+}
+
+model Prediction {
+  id           String @id @default(uuid())
+  farmerId     String
+  farmer       Farmer @relation(fields: [farmerId], references: [id])
+  cropId       String
+  crop         Crop   @relation(fields: [cropId], references: [id])
+  mandiId      String
+  mandi        Mandi  @relation(fields: [mandiId], references: [id])
+  landParcelId String?
+  landParcel   LandParcel? @relation(fields: [landParcelId], references: [id])
+
+  // Input
+  plantingDate         DateTime
+  harvestDate          DateTime
+  landSizeAcres        Float
+  seedVariety          String?
+  seedBrand            String?
+  seedCostInr          Float    @default(0)
+  fertilizerCostInr    Float    @default(0)
+  labourCostInr        Float    @default(0)
+  irrigationCostInr    Float    @default(0)
+  totalInputCostInr    Float    @default(0)
+
+  // Status
+  status PredictionStatus @default(PROCESSING)
+
+  // AI output
+  priceLowKg         Float?
+  priceHighKg        Float?
+  priceMedianKg      Float?
+  confidenceScore    Float?
+  demandTrend        DemandTrend?
+  weatherRisk        WeatherRisk?
+  priceCrashProb     Float?
+  lowDemandProb      Float?
+  weatherRiskProb    Float?
+  yieldEstTonsAcre   Float?
+  profitLowInr       Float?
+  profitHighInr      Float?
+  recommendation     Recommendation?
+  recommendationText   String?
+  recommendationTextHi String?
+  modelVersion       String?
+
+  // Feedback
+  actualPriceKg Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("predictions")
+}

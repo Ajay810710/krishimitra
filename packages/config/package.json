@@ -1,0 +1,14 @@
+{
+  "name": "@krishimitra/config",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./typescript-base": "./typescript-base.json",
+    "./typescript-next": "./typescript-next.json",
+    "./typescript-nestjs": "./typescript-nestjs.json"
+  },
+  "scripts": {
+    "build": "echo 'config package — nothing to build'",
+    "lint": "echo 'config package — nothing to lint'"
+  }
+}
