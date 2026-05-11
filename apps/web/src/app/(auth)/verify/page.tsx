@@ -1,16 +1,14 @@
-/**
- * OTP verification page — farmer enters the 6-digit code received via SMS.
- */
-
 'use client';
 
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useRef, useState } from 'react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth.store';
 
-export default function VerifyPage() {
+const OTP_RESEND_SECONDS = 60;
+
+function VerifyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone') ?? '';
@@ -19,22 +17,24 @@ export default function VerifyPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(OTP_RESEND_SECONDS);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const { setAuth } = useAuthStore();
 
+  // Countdown timer for resend button
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   const handleInput = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) {
-      return;
-    }
+    if (!/^\d*$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value.slice(-1);
     setOtp(newOtp);
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
     if (newOtp.every((d) => d !== '') && newOtp.length === 6) {
       void handleVerify(newOtp.join(''));
     }
@@ -49,7 +49,6 @@ export default function VerifyPage() {
   const handleVerify = async (code: string) => {
     setIsLoading(true);
     setError(null);
-
     try {
       const response = await apiClient.post<{
         data: {
@@ -63,8 +62,7 @@ export default function VerifyPage() {
       setAuth({ accessToken, refreshToken, farmer });
       router.push('/');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Invalid OTP. Please try again.';
+      const message = err instanceof Error ? err.message : 'गलत OTP। कृपया पुनः प्रयास करें।';
       setError(message);
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
@@ -74,14 +72,16 @@ export default function VerifyPage() {
   };
 
   const handleResend = async () => {
+    if (resendCooldown > 0) return;
     setIsResending(true);
     setError(null);
     try {
       await apiClient.post('/auth/request-otp', { phone });
       setOtp(Array(6).fill(''));
+      setResendCooldown(OTP_RESEND_SECONDS);
       inputRefs.current[0]?.focus();
     } catch {
-      setError('Failed to resend OTP. Please try again.');
+      setError('OTP भेजने में समस्या। कृपया पुनः प्रयास करें।');
     } finally {
       setIsResending(false);
     }
@@ -100,7 +100,6 @@ export default function VerifyPage() {
       </div>
 
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
-        {/* OTP Input Grid */}
         <div className="mb-6 flex justify-center gap-3">
           {otp.map((digit, index) => (
             <input
@@ -117,10 +116,13 @@ export default function VerifyPage() {
           ))}
         </div>
 
+        {/* OTP expiry hint */}
+        <p className="mb-4 text-center text-xs text-gray-400">
+          OTP 10 मिनट में समाप्त हो जाता है
+        </p>
+
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
         )}
 
         <button
@@ -132,15 +134,35 @@ export default function VerifyPage() {
         </button>
 
         <div className="mt-4 text-center">
-          <button
-            onClick={handleResend}
-            disabled={isResending}
-            className="text-sm text-krishna-600 hover:underline disabled:opacity-50"
-          >
-            {isResending ? 'OTP भेजा जा रहा है...' : 'OTP नहीं मिला? पुनः भेजें'}
-          </button>
+          {resendCooldown > 0 ? (
+            <p className="text-sm text-gray-400">
+              पुनः भेजें{' '}
+              <span className="font-semibold text-krishna-600">{resendCooldown}s</span>{' '}
+              में उपलब्ध
+            </p>
+          ) : (
+            <button
+              onClick={handleResend}
+              disabled={isResending}
+              className="text-sm font-medium text-krishna-600 hover:underline disabled:opacity-50"
+            >
+              {isResending ? 'OTP भेजा जा रहा है...' : 'OTP नहीं मिला? पुनः भेजें'}
+            </button>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-krishna-600 border-t-transparent" />
+      </div>
+    }>
+      <VerifyForm />
+    </Suspense>
   );
 }

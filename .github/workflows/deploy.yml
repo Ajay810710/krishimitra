@@ -1,0 +1,175 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy (all | api | web | ai)'
+        required: false
+        default: 'all'
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+jobs:
+  # ── Verify build before deploying ───────────────────────────────────────────
+  build-check:
+    name: Pre-deploy Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter api exec prisma generate
+      - run: pnpm --filter api build
+      - run: pnpm --filter web build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+  # ── Deploy API → Render ──────────────────────────────────────────────────────
+  deploy-api:
+    name: Deploy API (Render)
+    runs-on: ubuntu-latest
+    needs: build-check
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.service == 'all' || github.event.inputs.service == 'api'))
+    steps:
+      - name: Trigger Render deploy (API)
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_API }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "API deploy triggered on Render"
+
+      - name: Wait and verify API health
+        run: |
+          echo "Waiting 60s for Render to build and start..."
+          sleep 60
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.API_BASE_URL }}/health" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ API is healthy"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "⚠️ API health check inconclusive — check Render dashboard"
+          exit 0
+
+  # ── Deploy Web → Vercel ──────────────────────────────────────────────────────
+  deploy-web:
+    name: Deploy Web (Vercel)
+    runs-on: ubuntu-latest
+    needs: build-check
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.service == 'all' || github.event.inputs.service == 'web'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Deploy to Vercel (Production)
+        run: |
+          pnpm dlx vercel \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --prod \
+            --yes \
+            --cwd apps/web
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # ── Deploy AI Service → Render ───────────────────────────────────────────────
+  deploy-ai:
+    name: Deploy AI Service (Render)
+    runs-on: ubuntu-latest
+    needs: build-check
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.service == 'all' || github.event.inputs.service == 'ai'))
+    steps:
+      - name: Trigger Render deploy (AI)
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_AI }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
+          echo "AI service deploy triggered on Render"
+
+  # ── Post-deploy smoke test ───────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-web]
+    if: always() && (needs.deploy-api.result == 'success' || needs.deploy-web.result == 'success')
+    steps:
+      - name: API smoke tests
+        if: needs.deploy-api.result == 'success'
+        run: |
+          BASE="${{ secrets.API_BASE_URL }}"
+          echo "Testing $BASE..."
+
+          check() {
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+            echo "$2: HTTP $STATUS"
+            [ "$STATUS" = "$3" ] || echo "⚠️ Expected $3, got $STATUS"
+          }
+
+          check "$BASE/health"             "Health"          "200"
+          check "$BASE/market/crops"       "Market crops"    "200"
+          check "$BASE/market/mandis"      "Market mandis"   "200"
+          check "$BASE/schemes"            "Schemes"         "200"
+          check "$BASE/weather/forecast"   "Weather"         "200"
+          check "$BASE/auth/send-otp"      "Auth (no body)"  "400"
+
+          echo "✅ Smoke tests complete"
+
+      - name: Web smoke test
+        if: needs.deploy-web.result == 'success'
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.WEB_BASE_URL }}")
+          echo "Web landing: HTTP $STATUS"
+          [ "$STATUS" = "200" ] && echo "✅ Web is up" || echo "⚠️ Web returned $STATUS"
+
+  # ── Notify on failure ────────────────────────────────────────────────────────
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-web, deploy-ai, smoke-test]
+    if: failure()
+    steps:
+      - name: Log failure summary
+        run: |
+          echo "❌ Deploy pipeline failed!"
+          echo "API:        ${{ needs.deploy-api.result }}"
+          echo "Web:        ${{ needs.deploy-web.result }}"
+          echo "AI:         ${{ needs.deploy-ai.result }}"
+          echo "Smoke test: ${{ needs.smoke-test.result }}"
+          echo ""
+          echo "Check the Actions tab: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

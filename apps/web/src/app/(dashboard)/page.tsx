@@ -3,8 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
-  AlertCircle, ArrowRight, BarChart3, Leaf, TrendingUp,
-  TrendingDown, Zap, Bell, Activity, ChevronRight,
+  AlertCircle, ArrowRight, BarChart3, Cloud, FileText, FlaskConical,
+  Leaf, TrendingUp, TrendingDown, Zap, Bell, Activity, ChevronRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip,
@@ -15,12 +15,7 @@ import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth.store';
 import { formatPricePerKg, timeAgo } from '@krishimitra/shared';
 
-/* ── Demo sparkline data ── */
-const WHEAT_SPARK  = [18.2, 19.0, 18.7, 20.1, 21.4, 20.9, 22.4].map((v, i) => ({ i, v }));
-const MARKET_SPARK = [14.1, 15.3, 14.8, 16.2, 15.7, 17.0, 16.8].map((v, i) => ({ i, v }));
-
 const WEEK = ['सो', 'मं', 'बु', 'गु', 'शु', 'श', 'र'];
-const AREA_DATA = WHEAT_SPARK.map((d, i) => ({ day: WEEK[i], price: d.v }));
 
 interface Prediction {
   id: string;
@@ -45,7 +40,6 @@ const REC: Record<string, { bg: string; text: string; dot: string; label: string
   DEFAULT: { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-400',   label: 'विकल्प सोचें' },
 };
 
-/* Tiny inline sparkline */
 function Spark({ data, color }: { data: { i: number; v: number }[]; color: string }) {
   return (
     <ResponsiveContainer width="100%" height={48}>
@@ -76,19 +70,54 @@ export default function DashboardPage() {
     queryFn: () => apiClient.get('/alerts?limit=3').then((r) => r.data),
   });
 
+  // Fetch top market price trend (Tomato as a common indicator crop)
+  const { data: cropsData } = useQuery({
+    queryKey: ['crops'],
+    queryFn: () => apiClient.get('/market/crops').then((r) => r.data.data),
+    staleTime: 1000 * 60 * 60,
+  });
+
+  const { data: mandisData } = useQuery({
+    queryKey: ['mandis'],
+    queryFn: () => apiClient.get('/market/mandis').then((r) => r.data.data),
+    staleTime: 1000 * 60 * 60,
+  });
+
+  // Pick first available crop + mandi for the market pulse chart
+  const firstCrop  = cropsData?.[0];
+  const firstMandi = mandisData?.[0];
+
+  const { data: marketPriceData } = useQuery({
+    queryKey: ['market-pulse', firstCrop?.id, firstMandi?.id],
+    queryFn: () =>
+      apiClient.get(`/market/prices/${firstCrop.id}/${firstMandi.id}?limit=7`).then((r) => r.data.data),
+    enabled: !!firstCrop?.id && !!firstMandi?.id,
+    staleTime: 1000 * 60 * 30,
+  });
+
   const predictions: Prediction[] = historyData?.predictions ?? [];
   const alerts: Alert[] = alertsData?.data?.alerts ?? [];
   const unreadCount: number = alertsData?.data?.unreadCount ?? 0;
-  const latestPrice = predictions[0]?.priceMedianKg
-    ? Number(predictions[0].priceMedianKg)
-    : null;
+
+  // Build real sparkline data from market prices (newest last)
+  const sparkData: { i: number; v: number }[] = marketPriceData
+    ? [...marketPriceData].reverse().map((p: any, i: number) => ({ i, v: Number(p.modalPriceKg) }))
+    : [];
+
+  const areaData = sparkData.map((d, i) => ({ day: WEEK[i % 7], price: d.v }));
+
+  // Compute real price change
+  const latestMktPrice = marketPriceData?.[0] ? Number(marketPriceData[0].modalPriceKg) : null;
+  const prevMktPrice   = marketPriceData?.[1] ? Number(marketPriceData[1].modalPriceKg) : null;
+  const priceDiff = latestMktPrice && prevMktPrice ? latestMktPrice - prevMktPrice : null;
+  const pctChange = priceDiff && prevMktPrice ? ((priceDiff / prevMktPrice) * 100).toFixed(1) : null;
+  const priceUp   = priceDiff !== null && priceDiff >= 0;
 
   return (
     <div className="space-y-6 pb-4">
 
       {/* ── Welcome banner ── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-krishna-800 via-krishna-700 to-krishna-600 p-6 shadow-lg">
-        {/* Decorative circles */}
         <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/5" />
         <div className="pointer-events-none absolute -bottom-12 right-20 h-36 w-36 rounded-full bg-mandi-400/10" />
         <div className="pointer-events-none absolute bottom-2 left-1/2 h-16 w-16 rounded-full bg-white/5" />
@@ -126,16 +155,25 @@ export default function DashboardPage() {
                 <TrendingUp className="h-5 w-5 text-krishna-600" />
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500">आज का सर्वोत्तम भाव</p>
-                <p className="text-[10px] text-gray-400">गेहूं · दिल्ली मंडी</p>
+                <p className="text-xs font-medium text-gray-500">आज का बाजार भाव</p>
+                <p className="text-[10px] text-gray-400">
+                  {firstCrop ? (firstCrop.nameHindi ?? firstCrop.name) : '—'} · {firstMandi?.name ?? '—'}
+                </p>
               </div>
             </div>
-            <span className="badge-up">↑ 4.2%</span>
+            {pctChange ? (
+              <span className={priceUp ? 'badge-up' : 'badge-down'}>
+                {priceUp ? '↑' : '↓'} {Math.abs(Number(pctChange))}%
+              </span>
+            ) : null}
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">₹22.4<span className="text-sm font-normal text-gray-400">/kg</span></p>
+            <p className="text-2xl font-bold text-gray-900">
+              {latestMktPrice ? `₹${latestMktPrice.toFixed(1)}` : '—'}
+              <span className="text-sm font-normal text-gray-400">/kg</span>
+            </p>
           </div>
-          <Spark data={WHEAT_SPARK} color="#16a34a" />
+          {sparkData.length > 0 && <Spark data={sparkData} color="#16a34a" />}
         </div>
 
         {/* Card 2 — Market Trend */}
@@ -150,13 +188,21 @@ export default function DashboardPage() {
                 <p className="text-[10px] text-gray-400">पिछले 7 दिन</p>
               </div>
             </div>
-            <span className="badge-down">↓ 1.3%</span>
+            {pctChange ? (
+              <span className={priceUp ? 'badge-up' : 'badge-down'}>
+                {priceUp ? '↑' : '↓'} {Math.abs(Number(pctChange))}%
+              </span>
+            ) : <span className="badge-neutral">डेटा नहीं</span>}
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">₹16.8<span className="text-sm font-normal text-gray-400">/kg</span></p>
-            <p className="text-xs text-gray-400">प्याज · बाजार औसत</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {prevMktPrice ? `₹${prevMktPrice.toFixed(1)}` : '—'}
+              <span className="text-sm font-normal text-gray-400">/kg</span>
+            </p>
+            <p className="text-xs text-gray-400">
+              {firstCrop ? (firstCrop.nameHindi ?? firstCrop.name) : '—'} · बाजार औसत
+            </p>
           </div>
-          <Spark data={MARKET_SPARK} color="#3b82f6" />
         </div>
 
         {/* Card 3 — Active Alerts */}
@@ -175,7 +221,7 @@ export default function DashboardPage() {
               ? <span className="badge-up">{unreadCount} नए</span>
               : <span className="badge-neutral">कोई नहीं</span>}
           </div>
-          <p className="text-3xl font-bold text-gray-900 animate-count-up">{unreadCount}</p>
+          <p className="text-3xl font-bold text-gray-900">{unreadCount}</p>
           <Link href="/alerts" className="mt-auto flex items-center gap-1 text-xs font-medium text-krishna-600 hover:underline">
             अलर्ट देखें <ChevronRight className="h-3 w-3" />
           </Link>
@@ -187,40 +233,49 @@ export default function DashboardPage() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-gray-800">साप्ताहिक बाजार पल्स</h2>
-            <p className="text-xs text-gray-400">गेहूं · पिछले 7 दिन का भाव</p>
+            <p className="text-xs text-gray-400">
+              {firstCrop ? (firstCrop.nameHindi ?? firstCrop.name) : '—'} · पिछले 7 दिन का भाव
+            </p>
           </div>
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
-            <TrendingUp className="h-4 w-4" />
-            +4.2%
-          </div>
+          {pctChange && (
+            <div className={`flex items-center gap-1 text-sm font-semibold ${priceUp ? 'text-green-600' : 'text-red-500'}`}>
+              {priceUp ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              {priceUp ? '+' : ''}{pctChange}%
+            </div>
+          )}
         </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <AreaChart data={AREA_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#16a34a" stopOpacity={0}   />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-            <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} unit="₹" domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,.1)', fontSize: 13, padding: '8px 14px' }}
-              formatter={(v: number) => [`₹${v}/kg`, 'भाव']}
-              labelStyle={{ color: '#374151', fontWeight: 600 }}
-            />
-            <Area type="monotone" dataKey="price" stroke="#16a34a" strokeWidth={2.5}
-                  fill="url(#wg)" dot={false} activeDot={{ r: 5, fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }} />
-          </AreaChart>
-        </ResponsiveContainer>
-        <p className="mt-1 text-[10px] text-gray-300">* सांकेतिक डेटा — वास्तविक डेटा के लिए बाजार भाव देखें</p>
+        {areaData.length > 1 ? (
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={areaData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#16a34a" stopOpacity={0}   />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} unit="₹" domain={['auto', 'auto']} />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 24px rgba(0,0,0,.1)', fontSize: 13, padding: '8px 14px' }}
+                formatter={(v: number) => [`₹${v}/kg`, 'भाव']}
+                labelStyle={{ color: '#374151', fontWeight: 600 }}
+              />
+              <Area type="monotone" dataKey="price" stroke="#16a34a" strokeWidth={2.5}
+                    fill="url(#wg)" dot={false} activeDot={{ r: 5, fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-40 items-center justify-center text-sm text-gray-400">
+            मूल्य डेटा लोड हो रहा है...
+          </div>
+        )}
       </div>
 
       {/* ── Quick actions ── */}
       <div>
         <h2 className="mb-3 font-semibold text-gray-800">त्वरित क्रियाएं</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
           {[
             {
               href: '/forecast',
@@ -229,7 +284,6 @@ export default function DashboardPage() {
               sub: 'AI से जानें अगले सीजन का भाव',
               from: 'from-krishna-500',
               to: 'to-krishna-600',
-              bg: 'bg-krishna-50',
             },
             {
               href: '/recommend',
@@ -238,7 +292,6 @@ export default function DashboardPage() {
               sub: 'कौन सी फसल बोएं — AI सलाह',
               from: 'from-emerald-500',
               to: 'to-green-600',
-              bg: 'bg-emerald-50',
             },
             {
               href: '/market',
@@ -247,13 +300,36 @@ export default function DashboardPage() {
               sub: 'लाइव मंडी प्राइस देखें',
               from: 'from-blue-500',
               to: 'to-blue-600',
-              bg: 'bg-blue-50',
+            },
+            {
+              href: '/weather',
+              icon: Cloud,
+              title: 'मौसम पूर्वानुमान',
+              sub: '7-दिवसीय मौसम और जोखिम',
+              from: 'from-sky-400',
+              to: 'to-blue-500',
+            },
+            {
+              href: '/soil',
+              icon: FlaskConical,
+              title: 'मिट्टी स्वास्थ्य',
+              sub: 'NPK रिपोर्ट और अनुशंसाएं',
+              from: 'from-amber-500',
+              to: 'to-orange-600',
+            },
+            {
+              href: '/schemes',
+              icon: FileText,
+              title: 'सरकारी योजनाएं',
+              sub: 'PM-KISAN, KCC, PMFBY और अधिक',
+              from: 'from-purple-500',
+              to: 'to-violet-600',
             },
           ].map((a, i) => (
             <Link
               key={a.href}
               href={a.href}
-              className={`animate-fade-up card-hover flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100`}
+              className="animate-fade-up card-hover flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100"
               style={{ animationDelay: `${i * 0.08}s` }}
             >
               <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${a.from} ${a.to} shadow-md`}>
@@ -355,9 +431,7 @@ export default function DashboardPage() {
               <div
                 key={alert.id}
                 className={`flex items-start gap-3 rounded-2xl p-4 shadow-sm ring-1 ${
-                  alert.isRead
-                    ? 'bg-white ring-gray-100'
-                    : 'bg-krishna-50 ring-krishna-200'
+                  alert.isRead ? 'bg-white ring-gray-100' : 'bg-krishna-50 ring-krishna-200'
                 }`}
               >
                 <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-sm ${

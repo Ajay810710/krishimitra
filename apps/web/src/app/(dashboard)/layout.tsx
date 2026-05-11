@@ -13,13 +13,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { accessToken } = useAuthStore();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const toggle = () => setCollapsed((c) => !c);
 
   useEffect(() => {
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router]);
+    setMounted(true);
+  }, []);
 
-  if (!accessToken) {
+  useEffect(() => {
+    if (mounted && !accessToken) router.replace('/login');
+  }, [accessToken, router, mounted]);
+
+  // During hydration or while checking auth, show loading spinner
+  if (!mounted || !accessToken) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f0fdf4]">
         <div className="flex flex-col items-center gap-3">

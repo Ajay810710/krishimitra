@@ -125,7 +125,7 @@ export class AuthService {
   /**
    * Issues new access and refresh tokens using a valid refresh token.
    */
-  async refreshTokens(refreshToken: string): Promise<{ accessToken: string }> {
+  async refreshTokens(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     const stored = await this.prismaService.refreshToken.findUnique({
       where: { token: refreshToken },
       include: { farmer: { select: { id: true, phone: true, isActive: true } } },
@@ -142,7 +142,15 @@ export class AuthService {
     const payload: JwtPayload = { sub: stored.farmer.id, phone: stored.farmer.phone };
     const accessToken = this.jwtService.sign(payload);
 
-    return { accessToken };
+    // Rotate refresh token on every use (prevents token replay attacks)
+    const newRefreshValue = `rt_${Buffer.from(randomInt(0, 2 ** 48 - 1).toString()).toString('base64url')}_${Date.now()}`;
+    const newRefreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.prismaService.refreshToken.update({
+      where: { id: stored.id },
+      data: { token: newRefreshValue, expiresAt: newRefreshExpiresAt },
+    });
+
+    return { accessToken, refreshToken: newRefreshValue };
   }
 
   /**

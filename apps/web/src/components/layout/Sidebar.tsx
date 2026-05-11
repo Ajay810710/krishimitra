@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   AlertCircle, BarChart3, ChevronLeft, ChevronRight,
-  Clock, Home, Leaf, LogOut, TrendingUp, User,
+  Clock, Cloud, FileText, FlaskConical, Home, Leaf, LogOut, TrendingUp, User,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/auth.store';
@@ -20,6 +20,9 @@ const NAV_ITEMS = [
   { href: '/forecast',  label: 'मूल्य पूर्वानुमान', labelEn: 'Forecast',     icon: TrendingUp },
   { href: '/recommend', label: 'फसल सलाह',         labelEn: 'Crop Advice',  icon: Leaf },
   { href: '/market',    label: 'बाजार भाव',         labelEn: 'Market',       icon: BarChart3 },
+  { href: '/weather',   label: 'मौसम',              labelEn: 'Weather',      icon: Cloud },
+  { href: '/soil',      label: 'मिट्टी स्वास्थ्य',   labelEn: 'Soil Health',  icon: FlaskConical },
+  { href: '/schemes',   label: 'सरकारी योजनाएं',    labelEn: 'Gov Schemes',  icon: FileText },
   { href: '/alerts',    label: 'अलर्ट',             labelEn: 'Alerts',       icon: AlertCircle },
   { href: '/history',   label: 'इतिहास',            labelEn: 'History',      icon: Clock },
   { href: '/profile',   label: 'प्रोफ़ाइल',          labelEn: 'Profile',      icon: User },

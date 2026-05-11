@@ -17,6 +17,8 @@ import type { Crop, Mandi, MandiPrice } from '@krishimitra/shared';
 export default function MarketPage() {
   const [selectedCropId, setSelectedCropId]   = useState('');
   const [selectedMandiId, setSelectedMandiId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate]     = useState('');
 
   const { data: cropsData } = useQuery({
     queryKey: ['crops'],
@@ -31,11 +33,15 @@ export default function MarketPage() {
   });
 
   const { data: pricesData, isLoading: pricesLoading } = useQuery({
-    queryKey: ['market-prices', selectedCropId, selectedMandiId],
-    queryFn: () =>
-      apiClient
-        .get(`/market/prices/${selectedCropId}/${selectedMandiId}?limit=30`)
-        .then((r) => r.data.data as MandiPrice[]),
+    queryKey: ['market-prices', selectedCropId, selectedMandiId, startDate, endDate],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '90' });
+      if (startDate) params.set('startDate', startDate);
+      if (endDate)   params.set('endDate', endDate);
+      return apiClient
+        .get(`/market/prices/${selectedCropId}/${selectedMandiId}?${params}`)
+        .then((r) => r.data.data as MandiPrice[]);
+    },
     enabled: !!selectedCropId && !!selectedMandiId,
   });
 
@@ -91,6 +97,29 @@ export default function MarketPage() {
           selectedMandiId={selectedMandiId}
           onSelect={setSelectedMandiId}
         />
+
+        {selectedCropId && selectedMandiId && (
+          <>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">शुरुआत तारीख</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition focus:border-krishna-500 focus:outline-none focus:ring-2 focus:ring-krishna-100"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">अंतिम तारीख</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition focus:border-krishna-500 focus:outline-none focus:ring-2 focus:ring-krishna-100"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {selectedCropId && selectedMandiId ? (

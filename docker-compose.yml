@@ -7,15 +7,15 @@ services:
     container_name: krishimitra_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: krishimitra
-      POSTGRES_PASSWORD: krishimitra_dev_password
-      POSTGRES_DB: krishimitra_db
+      POSTGRES_USER: ${POSTGRES_USER:-krishimitra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-krishimitra_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-krishimitra_db}
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U krishimitra']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-krishimitra}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,7 +48,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: postgresql://krishimitra:krishimitra_dev_password@postgres:5432/krishimitra_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-krishimitra}:${POSTGRES_PASSWORD:-krishimitra_dev_password}@postgres:5432/${POSTGRES_DB:-krishimitra_db}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -89,7 +89,7 @@ services:
     ports:
       - '8000:8000'
     environment:
-      DATABASE_URL: postgresql://krishimitra:krishimitra_dev_password@postgres:5432/krishimitra_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-krishimitra}:${POSTGRES_PASSWORD:-krishimitra_dev_password}@postgres:5432/${POSTGRES_DB:-krishimitra_db}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -105,8 +105,8 @@ services:
     container_name: krishimitra_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@krishimitra.dev
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@krishimitra.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
     ports:
       - '5050:80'
     depends_on:
