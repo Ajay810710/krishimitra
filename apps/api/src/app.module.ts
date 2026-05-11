@@ -13,6 +13,7 @@ import { MarketModule } from './modules/market/market.module.js';
 import { FarmerModule } from './modules/farmer/farmer.module.js';
 import { AlertModule } from './modules/alert/alert.module.js';
 import { PredictionModule } from './modules/prediction/prediction.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PredictionModule } from './modules/prediction/prediction.module.js';
     FarmerModule,
     AlertModule,
     PredictionModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [
