@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Users, Sprout, MapPin,
-  BarChart3, RefreshCw, LogOut, Shield,
+  BarChart3, RefreshCw, LogOut, Shield, Bell, TrendingUp, PieChart,
 } from 'lucide-react';
 import { getAdminKey, clearAdminKey } from '@/lib/admin-client';
 
@@ -16,6 +16,9 @@ const NAV = [
   { href: '/admin/crops',       icon: Sprout,          label: 'Crops' },
   { href: '/admin/mandis',      icon: MapPin,          label: 'Mandis' },
   { href: '/admin/sync',        icon: RefreshCw,       label: 'Price Sync' },
+  { href: '/admin/prices',      icon: TrendingUp,      label: 'Manual Prices' },
+  { href: '/admin/broadcast',   icon: Bell,            label: 'Broadcast' },
+  { href: '/admin/analytics',   icon: PieChart,        label: 'Analytics' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -41,15 +44,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-950">
       {/* Sidebar */}
       <aside className="flex w-56 flex-col bg-gray-900 text-white">
         <div className="flex items-center gap-2 border-b border-gray-700 px-5 py-4">
-          <Shield className="h-5 w-5 text-krishna-400" />
+          <Shield className="h-5 w-5 text-green-400" />
           <span className="text-sm font-bold tracking-wide text-white">KrishiMitra Admin</span>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3 py-4">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
           {NAV.map(({ href, icon: Icon, label }) => {
             const active = pathname === href;
             return (
@@ -58,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={href}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   active
-                    ? 'bg-krishna-600 text-white'
+                    ? 'bg-green-700 text-white'
                     : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                 }`}
               >
@@ -81,7 +84,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto bg-gray-950 p-8">
         {children}
       </main>
     </div>

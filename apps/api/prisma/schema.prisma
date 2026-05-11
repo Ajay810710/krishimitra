@@ -82,6 +82,7 @@ model Farmer {
   landParcels   LandParcel[]
 
   alerts        Alert[]
+  soilTests     SoilTest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +127,7 @@ model LandParcel {
   soilType   String?
 
   predictions Prediction[]
+  soilTests   SoilTest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -144,8 +146,9 @@ model Crop {
   typicalDaysToHarvest Int?
   isActive             Boolean      @default(true)
 
-  predictions  Prediction[]
-  mandiPrices  MandiPrice[]
+  predictions        Prediction[]
+  mandiPrices        MandiPrice[]
+  manualPriceEntries ManualPriceEntry[]
 
   yieldPerAcreMin  Float?
   yieldPerAcreMax  Float?
@@ -166,9 +169,10 @@ model Mandi {
   longitude Float?
   isActive  Boolean @default(true)
 
-  farmers     Farmer[]
-  predictions Prediction[]
-  mandiPrices MandiPrice[]
+  farmers            Farmer[]
+  predictions        Prediction[]
+  mandiPrices        MandiPrice[]
+  manualPriceEntries ManualPriceEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -264,6 +268,9 @@ enum AlertType {
   PRICE_ALERT
   RECOMMENDATION
   MARKET_UPDATE
+  BROADCAST
+  WEATHER_ALERT
+  SCHEME_ALERT
 }
 
 model Alert {
@@ -282,4 +289,90 @@ model Alert {
 
   @@index([farmerId, isRead])
   @@map("alerts")
+}
+
+// ── Soil Health ───────────────────────────────────────────────
+
+model SoilTest {
+  id           String      @id @default(uuid())
+  farmerId     String
+  farmer       Farmer      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  landParcelId String?
+  landParcel   LandParcel? @relation(fields: [landParcelId], references: [id], onDelete: SetNull)
+
+  testDate     DateTime
+  labName      String?
+  nitrogen     Float?
+  phosphorus   Float?
+  potassium    Float?
+  ph           Float?
+  organicMatter Float?
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([farmerId])
+  @@map("soil_tests")
+}
+
+// ── Government Schemes ────────────────────────────────────────
+
+enum SchemeCategory {
+  INSURANCE
+  SUBSIDY
+  LOAN
+  INFRASTRUCTURE
+  MARKET_SUPPORT
+  TRAINING
+}
+
+model Scheme {
+  id          String         @id @default(uuid())
+  name        String
+  nameHindi   String?
+  category    SchemeCategory
+  description String
+  descriptionHindi String?
+  eligibility String
+  benefit     String
+  deadline    String?
+  applyUrl    String?
+  isActive    Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("schemes")
+}
+
+// ── Broadcast Alerts ──────────────────────────────────────────
+
+model BroadcastAlert {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  targetAll Boolean  @default(true)
+  sentCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("broadcast_alerts")
+}
+
+// ── Manual Price Entry ────────────────────────────────────────
+
+model ManualPriceEntry {
+  id         String   @id @default(uuid())
+  mandiId    String
+  mandi      Mandi    @relation(fields: [mandiId], references: [id])
+  cropId     String
+  crop       Crop     @relation(fields: [cropId], references: [id])
+  priceDate  DateTime @db.Date
+  modalPrice Float
+  minPrice   Float
+  maxPrice   Float
+  source     String   @default("MANUAL")
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@map("manual_price_entries")
 }

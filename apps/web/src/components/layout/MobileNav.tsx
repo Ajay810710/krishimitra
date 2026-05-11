@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, BarChart3, Home, TrendingUp, User } from 'lucide-react';
+import { BarChart3, Cloud, FileText, FlaskConical, Home } from 'lucide-react';
 
 const ITEMS = [
-  { href: '/',         icon: Home,         label: 'होम' },
-  { href: '/forecast', icon: TrendingUp,   label: 'पूर्वानुमान' },
-  { href: '/market',   icon: BarChart3,    label: 'बाजार' },
-  { href: '/alerts',   icon: AlertCircle,  label: 'अलर्ट' },
-  { href: '/profile',  icon: User,         label: 'प्रोफ़ाइल' },
+  { href: '/',        icon: Home,         label: 'होम' },
+  { href: '/market',  icon: BarChart3,    label: 'बाजार' },
+  { href: '/weather', icon: Cloud,        label: 'मौसम' },
+  { href: '/soil',    icon: FlaskConical, label: 'मिट्टी' },
+  { href: '/schemes', icon: FileText,     label: 'योजनाएं' },
 ];
 
 export function MobileNav() {
@@ -17,7 +17,7 @@ export function MobileNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200/80 bg-white/95 pb-safe shadow-lg backdrop-blur-md lg:hidden">
-      <div className="grid grid-cols-5 px-2 py-1">
+      <div className="grid grid-cols-5 px-2 py-1 overflow-x-auto">
         {ITEMS.map((item) => {
           const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           return (

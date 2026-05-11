@@ -3,8 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
-  AlertCircle, ArrowRight, BarChart3, Leaf, TrendingUp,
-  TrendingDown, Zap, Bell, Activity, ChevronRight,
+  AlertCircle, ArrowRight, BarChart3, Cloud, FileText, FlaskConical,
+  Leaf, TrendingUp, TrendingDown, Zap, Bell, Activity, ChevronRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip,
@@ -275,7 +275,7 @@ export default function DashboardPage() {
       {/* ── Quick actions ── */}
       <div>
         <h2 className="mb-3 font-semibold text-gray-800">त्वरित क्रियाएं</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
           {[
             {
               href: '/forecast',
@@ -300,6 +300,30 @@ export default function DashboardPage() {
               sub: 'लाइव मंडी प्राइस देखें',
               from: 'from-blue-500',
               to: 'to-blue-600',
+            },
+            {
+              href: '/weather',
+              icon: Cloud,
+              title: 'मौसम पूर्वानुमान',
+              sub: '7-दिवसीय मौसम और जोखिम',
+              from: 'from-sky-400',
+              to: 'to-blue-500',
+            },
+            {
+              href: '/soil',
+              icon: FlaskConical,
+              title: 'मिट्टी स्वास्थ्य',
+              sub: 'NPK रिपोर्ट और अनुशंसाएं',
+              from: 'from-amber-500',
+              to: 'to-orange-600',
+            },
+            {
+              href: '/schemes',
+              icon: FileText,
+              title: 'सरकारी योजनाएं',
+              sub: 'PM-KISAN, KCC, PMFBY और अधिक',
+              from: 'from-purple-500',
+              to: 'to-violet-600',
             },
           ].map((a, i) => (
             <Link

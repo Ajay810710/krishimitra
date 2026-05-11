@@ -1,8 +1,8 @@
 import {
-  Controller, Get, Post, Put, Delete,
+  Controller, Get, Post, Put,
   Body, Param, Query, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
-import { IsString, IsOptional, IsBoolean, IsNumber, Min, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber, IsDateString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AdminGuard } from './admin.guard.js';
 import { AdminService } from './admin.service.js';
@@ -29,6 +29,25 @@ class UpdateFarmerDto {
 
 class SyncDto {
   @IsOptional() @IsString() date?: string;
+}
+
+class BroadcastDto {
+  @IsString() title!: string;
+  @IsString() titleHi!: string;
+  @IsString() message!: string;
+  @IsString() messageHi!: string;
+  @IsOptional() @IsString() type?: string;
+}
+
+class ManualPriceDto {
+  @IsString() cropId!: string;
+  @IsString() mandiId!: string;
+  @IsDateString() priceDate!: string;
+  @IsNumber() @Min(0) @Type(() => Number) minPriceKg!: number;
+  @IsNumber() @Min(0) @Type(() => Number) maxPriceKg!: number;
+  @IsNumber() @Min(0) @Type(() => Number) modalPriceKg!: number;
+  @IsOptional() @IsNumber() @Min(0) @Type(() => Number) arrivalTons?: number;
+  @IsOptional() @IsString() source?: string;
 }
 
 @Controller('admin')
@@ -103,5 +122,24 @@ export class AdminController {
   @Get('sync/status')
   getSyncStatus() {
     return this.adminService.getSyncStatus();
+  }
+
+  /** POST /api/admin/broadcast — send alert to all active farmers */
+  @Post('broadcast')
+  @HttpCode(HttpStatus.OK)
+  broadcastAlert(@Body() dto: BroadcastDto) {
+    return this.adminService.broadcastAlert(dto);
+  }
+
+  /** GET /api/admin/analytics/farmers — farmer cohort analytics */
+  @Get('analytics/farmers')
+  getFarmerAnalytics() {
+    return this.adminService.getFarmerAnalytics();
+  }
+
+  /** POST /api/admin/prices/manual — add or update a price record */
+  @Post('prices/manual')
+  addManualPrice(@Body() dto: ManualPriceDto) {
+    return this.adminService.addManualPrice(dto);
   }
 }

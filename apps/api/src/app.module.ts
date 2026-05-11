@@ -14,6 +14,9 @@ import { FarmerModule } from './modules/farmer/farmer.module.js';
 import { AlertModule } from './modules/alert/alert.module.js';
 import { PredictionModule } from './modules/prediction/prediction.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { WeatherModule } from './modules/weather/weather.module.js';
+import { SoilModule } from './modules/soil/soil.module.js';
+import { SchemesModule } from './modules/schemes/schemes.module.js';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { AdminModule } from './modules/admin/admin.module.js';
     AlertModule,
     PredictionModule,
     AdminModule,
+    WeatherModule,
+    SoilModule,
+    SchemesModule,
   ],
   controllers: [AppController],
   providers: [
