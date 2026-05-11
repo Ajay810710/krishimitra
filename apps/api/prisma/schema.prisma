@@ -81,9 +81,12 @@ model Farmer {
   predictions   Prediction[]
   landParcels   LandParcel[]
 
+  alerts        Alert[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([phone])
   @@map("farmers")
 }
 
@@ -144,6 +147,9 @@ model Crop {
   predictions  Prediction[]
   mandiPrices  MandiPrice[]
 
+  yieldPerAcreMin  Float?
+  yieldPerAcreMax  Float?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -194,6 +200,7 @@ model MandiPrice {
   updatedAt DateTime @updatedAt
 
   @@unique([mandiId, cropId, priceDate, variety, grade], name: "mandiId_cropId_priceDate_variety_grade")
+  @@index([mandiId, cropId, priceDate])
   @@map("mandi_prices")
 }
 
@@ -244,8 +251,35 @@ model Prediction {
   // Feedback
   actualPriceKg Float?
 
+  alerts Alert[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([farmerId])
   @@map("predictions")
+}
+
+enum AlertType {
+  PRICE_ALERT
+  RECOMMENDATION
+  MARKET_UPDATE
+}
+
+model Alert {
+  id           String    @id @default(uuid())
+  farmerId     String
+  farmer       Farmer    @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  predictionId String?
+  prediction   Prediction? @relation(fields: [predictionId], references: [id], onDelete: SetNull)
+
+  type    AlertType @default(RECOMMENDATION)
+  title   String
+  message String
+  isRead  Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([farmerId, isRead])
+  @@map("alerts")
 }

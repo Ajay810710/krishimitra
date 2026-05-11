@@ -1,72 +1,59 @@
-import { Controller, Get, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Query, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
-import { extractFarmerIdFromHeader } from '../../common/jwt-extract.js';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentFarmer } from '../auth/decorators/current-farmer.decorator.js';
+import type { JwtPayload } from '../auth/decorators/current-farmer.decorator.js';
 
 @Controller('alerts')
+@UseGuards(JwtAuthGuard)
 export class AlertController {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * GET /api/alerts
-   * Returns price-related alerts generated from recent market data.
-   * Since there is no dedicated Alert table, we derive alerts from the
-   * farmer's recent predictions and the latest mandi prices.
-   */
+  /** GET /api/alerts */
   @Get()
   async getAlerts(
-    @Headers('authorization') auth: string,
+    @CurrentFarmer() user: JwtPayload,
     @Query('limit') limit?: string,
   ) {
-    const farmerId = extractFarmerIdFromHeader(auth);
-    const take = limit ? Math.min(parseInt(limit, 10), 50) : 10;
+    const take = limit ? Math.min(Math.max(1, parseInt(limit, 10)), 50) : 20;
 
-    if (!farmerId) {
-      return { data: { alerts: [], unreadCount: 0 } };
-    }
-
-    // Build alerts from the farmer's completed predictions
-    const predictions = await this.prisma.prediction.findMany({
-      where: { farmerId, status: 'COMPLETED' },
+    const alerts = await this.prisma.alert.findMany({
+      where: { farmerId: user.sub },
       orderBy: { createdAt: 'desc' },
       take,
       select: {
-        id: true,
-        createdAt: true,
-        recommendation: true,
-        recommendationTextHi: true,
-        recommendationText: true,
-        priceMedianKg: true,
-        demandTrend: true,
-        crop: { select: { name: true, nameHindi: true } },
-        mandi: { select: { name: true } },
+        id: true, type: true, title: true, message: true,
+        isRead: true, createdAt: true,
       },
     });
 
-    const alerts = predictions.map((p, idx) => {
-      const cropName = p.crop.nameHindi ?? p.crop.name;
-      const title =
-        p.recommendation === 'PLANT'
-          ? `${cropName} — बोने का सही समय`
-          : p.recommendation === 'WAIT'
-          ? `${cropName} — प्रतीक्षा करें`
-          : `${cropName} — विकल्प सोचें`;
-
-      const message =
-        p.recommendationTextHi ??
-        p.recommendationText ??
-        `${p.mandi.name} में ${cropName} का अनुमानित भाव ₹${p.priceMedianKg ? Number(p.priceMedianKg).toFixed(1) : '—'}/kg`;
-
-      return {
-        id: p.id,
-        title,
-        message,
-        isRead: idx > 1,  // first 2 are "unread" for demo
-        createdAt: p.createdAt.toISOString(),
-      };
+    const unreadCount = await this.prisma.alert.count({
+      where: { farmerId: user.sub, isRead: false },
     });
 
-    const unreadCount = alerts.filter((a) => !a.isRead).length;
-
     return { data: { alerts, unreadCount } };
+  }
+
+  /** PATCH /api/alerts/:id/read */
+  @Patch(':id/read')
+  async markRead(
+    @CurrentFarmer() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    await this.prisma.alert.updateMany({
+      where: { id, farmerId: user.sub },
+      data: { isRead: true },
+    });
+    return { success: true };
+  }
+
+  /** PATCH /api/alerts/read-all */
+  @Patch('read-all')
+  async markAllRead(@CurrentFarmer() user: JwtPayload) {
+    await this.prisma.alert.updateMany({
+      where: { farmerId: user.sub, isRead: false },
+      data: { isRead: true },
+    });
+    return { success: true };
   }
 }

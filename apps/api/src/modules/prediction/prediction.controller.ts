@@ -1,28 +1,24 @@
-import { Body, Controller, Get, Headers, Post, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { PredictionService } from './prediction.service.js';
 import { PredictPriceDto } from './dto/predict-price.dto.js';
-import { extractFarmerIdFromHeader } from '../../common/jwt-extract.js';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CurrentFarmer } from '../auth/decorators/current-farmer.decorator.js';
+import type { JwtPayload } from '../auth/decorators/current-farmer.decorator.js';
 
 @Controller('predict')
+@UseGuards(JwtAuthGuard)
 export class PredictionController {
   constructor(private readonly predictionService: PredictionService) {}
 
   /** POST /api/predict/price */
   @Post('price')
-  async predictPrice(
-    @Headers('authorization') auth: string,
-    @Body() dto: PredictPriceDto,
-  ) {
-    const farmerId = extractFarmerIdFromHeader(auth);
-    if (!farmerId) throw new UnauthorizedException('Authentication required');
-    return this.predictionService.predictPrice(farmerId, dto);
+  async predictPrice(@CurrentFarmer() user: JwtPayload, @Body() dto: PredictPriceDto) {
+    return this.predictionService.predictPrice(user.sub, dto);
   }
 
   /** GET /api/predict/recommend */
   @Get('recommend')
-  async getRecommendations(@Headers('authorization') auth: string) {
-    const farmerId = extractFarmerIdFromHeader(auth);
-    if (!farmerId) throw new UnauthorizedException('Authentication required');
-    return { data: await this.predictionService.getRecommendations(farmerId) };
+  async getRecommendations(@CurrentFarmer() user: JwtPayload) {
+    return { data: await this.predictionService.getRecommendations(user.sub) };
   }
 }

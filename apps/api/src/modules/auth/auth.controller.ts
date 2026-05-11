@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { IsString, Matches, Length } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 
 class RequestOtpDto {
@@ -23,12 +24,14 @@ export class AuthController {
 
   @Post('request-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 3600000, limit: 5 } })
   requestOtp(@Body() body: RequestOtpDto) {
     return this.authService.requestOtp(body.phone);
   }
 
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 3600000, limit: 10 } })
   async verifyOtp(@Body() body: VerifyOtpDto) {
     const data = await this.authService.verifyOtp(body.phone, body.code);
     return { data };

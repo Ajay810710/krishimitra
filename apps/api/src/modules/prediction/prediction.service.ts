@@ -34,6 +34,12 @@ export class PredictionService {
       throw new BadRequestException('Harvest date must be after planting date');
     }
 
+    // Fetch crop details for per-crop yield estimate
+    const crop = await this.prismaService.crop.findUnique({
+      where: { id: dto.cropId },
+      select: { yieldPerAcreMin: true, yieldPerAcreMax: true, category: true },
+    });
+
     // Fetch last 30 days of mandi price data for this crop+mandi
     const recentPrices = await this.prismaService.mandiPrice.findMany({
       where: { cropId: dto.cropId, mandiId: dto.mandiId },
@@ -75,11 +81,19 @@ export class PredictionService {
     const priceLow    = parseFloat((baseMin  * seasonalFactor * 0.92).toFixed(2));
     const priceHigh   = parseFloat((baseMax  * seasonalFactor * 1.08).toFixed(2));
 
-    // Yield and profit estimates
-    const yieldTonsAcre = 2.5;
+    // Per-crop yield estimate (tons/acre) — use DB value if set, else category default
+    const CATEGORY_YIELD: Record<string, number> = {
+      VEGETABLE: 6.0, GRAIN: 2.0, FRUIT: 8.0, SPICE: 1.5, PULSE: 1.2, OILSEED: 1.0,
+    };
+    const yieldTonsAcre = crop?.yieldPerAcreMin && crop?.yieldPerAcreMax
+      ? (crop.yieldPerAcreMin + crop.yieldPerAcreMax) / 2
+      : CATEGORY_YIELD[crop?.category ?? 'GRAIN'] ?? 2.5;
+
+    // Market commission (2.5%) and transport deduction (~5%) reduce net revenue
+    const NET_REVENUE_FACTOR = 0.925;
     const totalKg = yieldTonsAcre * dto.landSizeAcres * 1000;
-    const profitLow  = parseFloat((totalKg * priceLow  - totalInputCostInr).toFixed(0));
-    const profitHigh = parseFloat((totalKg * priceHigh - totalInputCostInr).toFixed(0));
+    const profitLow  = parseFloat((totalKg * priceLow  * NET_REVENUE_FACTOR - totalInputCostInr).toFixed(0));
+    const profitHigh = parseFloat((totalKg * priceHigh * NET_REVENUE_FACTOR - totalInputCostInr).toFixed(0));
 
     // Recommendation logic
     const margin = (totalKg * priceMedian - totalInputCostInr) / (totalInputCostInr || 1);
@@ -135,6 +149,25 @@ export class PredictionService {
       },
     });
 
+    // Create a persistent alert for this prediction
+    const cropName = prediction.crop.nameHindi ?? prediction.crop.name;
+    const alertTitle =
+      recommendation === 'PLANT'
+        ? `${cropName} — बोने का सही समय`
+        : recommendation === 'WAIT'
+        ? `${cropName} — प्रतीक्षा करें`
+        : `${cropName} — विकल्प सोचें`;
+
+    await this.prismaService.alert.create({
+      data: {
+        farmerId,
+        predictionId: prediction.id,
+        type: 'RECOMMENDATION',
+        title: alertTitle,
+        message: recTextHi,
+      },
+    });
+
     return prediction;
   }
 
@@ -158,7 +191,7 @@ export class PredictionService {
     // Get all crops with last 30d price data for this mandi
     const crops = await this.prismaService.crop.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, nameHindi: true },
+      select: { id: true, name: true, nameHindi: true, category: true, yieldPerAcreMin: true, yieldPerAcreMax: true },
     });
 
     const recommendations = await Promise.all(
@@ -181,8 +214,15 @@ export class PredictionService {
 
         const rec = score > 0.65 ? 'PLANT' : score > 0.4 ? 'WAIT' : 'CONSIDER_ALTERNATIVES';
         const expectedPrice = parseFloat(avgRecent.toFixed(2));
-        const yieldKg = 2500;
-        const expectedProfit = Math.round(yieldKg * expectedPrice - 15000);
+        const CATEGORY_YIELD: Record<string, number> = {
+          VEGETABLE: 6.0, GRAIN: 2.0, FRUIT: 8.0, SPICE: 1.5, PULSE: 1.2, OILSEED: 1.0,
+        };
+        const yieldTons = crop.yieldPerAcreMin && crop.yieldPerAcreMax
+          ? (crop.yieldPerAcreMin + crop.yieldPerAcreMax) / 2
+          : CATEGORY_YIELD[crop.category] ?? 2.5;
+        const yieldKg = yieldTons * 1000;
+        const avgInputCost = yieldKg * expectedPrice * 0.4; // ~40% input cost ratio
+        const expectedProfit = Math.round(yieldKg * expectedPrice * 0.925 - avgInputCost);
 
         return {
           crop_id:               crop.id,

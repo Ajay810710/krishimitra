@@ -18,5 +18,5 @@ services:
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 15m
-      - key: AI_SERVICE_URL
-        value: http://localhost:8000
+      - key: CORS_ORIGIN
+        sync: false

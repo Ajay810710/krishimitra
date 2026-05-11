@@ -50,10 +50,20 @@ export class MarketController {
     @Param('cropId') cropId: string,
     @Param('mandiId') mandiId: string,
     @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     const take = limit ? Math.min(parseInt(limit, 10), 90) : 30;
+
+    const dateFilter: Record<string, Date> = {};
+    if (startDate) dateFilter.gte = new Date(startDate);
+    if (endDate)   dateFilter.lte = new Date(endDate);
+
     const prices = await this.prisma.mandiPrice.findMany({
-      where: { cropId, mandiId },
+      where: {
+        cropId, mandiId,
+        ...(Object.keys(dateFilter).length > 0 && { priceDate: dateFilter }),
+      },
       orderBy: { priceDate: 'desc' },
       take,
       select: {

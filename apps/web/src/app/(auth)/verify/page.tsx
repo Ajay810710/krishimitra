@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useRef, useState } from 'react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth.store';
+
+const OTP_RESEND_SECONDS = 60;
 
 function VerifyForm() {
   const router = useRouter();
@@ -16,9 +17,17 @@ function VerifyForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(OTP_RESEND_SECONDS);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const { setAuth } = useAuthStore();
+
+  // Countdown timer for resend button
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleInput = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -53,7 +62,7 @@ function VerifyForm() {
       setAuth({ accessToken, refreshToken, farmer });
       router.push('/');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid OTP. Please try again.';
+      const message = err instanceof Error ? err.message : 'गलत OTP। कृपया पुनः प्रयास करें।';
       setError(message);
       setOtp(Array(6).fill(''));
       inputRefs.current[0]?.focus();
@@ -63,14 +72,16 @@ function VerifyForm() {
   };
 
   const handleResend = async () => {
+    if (resendCooldown > 0) return;
     setIsResending(true);
     setError(null);
     try {
       await apiClient.post('/auth/request-otp', { phone });
       setOtp(Array(6).fill(''));
+      setResendCooldown(OTP_RESEND_SECONDS);
       inputRefs.current[0]?.focus();
     } catch {
-      setError('Failed to resend OTP. Please try again.');
+      setError('OTP भेजने में समस्या। कृपया पुनः प्रयास करें।');
     } finally {
       setIsResending(false);
     }
@@ -105,6 +116,11 @@ function VerifyForm() {
           ))}
         </div>
 
+        {/* OTP expiry hint */}
+        <p className="mb-4 text-center text-xs text-gray-400">
+          OTP 10 मिनट में समाप्त हो जाता है
+        </p>
+
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
         )}
@@ -118,13 +134,21 @@ function VerifyForm() {
         </button>
 
         <div className="mt-4 text-center">
-          <button
-            onClick={handleResend}
-            disabled={isResending}
-            className="text-sm text-krishna-600 hover:underline disabled:opacity-50"
-          >
-            {isResending ? 'OTP भेजा जा रहा है...' : 'OTP नहीं मिला? पुनः भेजें'}
-          </button>
+          {resendCooldown > 0 ? (
+            <p className="text-sm text-gray-400">
+              पुनः भेजें{' '}
+              <span className="font-semibold text-krishna-600">{resendCooldown}s</span>{' '}
+              में उपलब्ध
+            </p>
+          ) : (
+            <button
+              onClick={handleResend}
+              disabled={isResending}
+              className="text-sm font-medium text-krishna-600 hover:underline disabled:opacity-50"
+            >
+              {isResending ? 'OTP भेजा जा रहा है...' : 'OTP नहीं मिला? पुनः भेजें'}
+            </button>
+          )}
         </div>
       </div>
     </div>
